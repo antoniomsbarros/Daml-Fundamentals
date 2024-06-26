@@ -1,0 +1,14 @@
+module MainTest where
+
+import Daml.Script
+import PropertyRentalTest (testPropertyListing, testRentalAgreement, testEndRentalAgreement,testInvalidPropertyStatusUpdate,testInvalidRentalStartDate, testInvalidPaymentAmount)
+
+mainTest : Script ()
+mainTest = script do
+  testPropertyListing
+  testRentalAgreement
+  testEndRentalAgreement
+  testInvalidPropertyStatusUpdate
+  testInvalidRentalStartDate
+  testInvalidPaymentAmount
+  return ()

@@ -1,0 +1,96 @@
+module PropertyRental where
+import DA.Date 
+
+-- Define custom data types
+data PropertyStatus = Available | Rented | Maintenance
+  deriving (Eq, Show)
+
+data PaymentStatus = Pending | Completed
+  deriving (Eq, Show)
+
+data Property = Property
+  with
+    propertyId : Text
+    address : Text
+    owner : Party
+    status : PropertyStatus
+  deriving (Eq, Show)
+
+data RentalAgreement = RentalAgreement
+  with
+    agreementId : Text
+    property : Property
+    tenant : Party
+    startDate : Date
+    endDate : Date
+    rent : Decimal
+    paymentStatus : PaymentStatus
+  deriving (Eq, Show)
+
+-- Rental Agreement Template
+template RentalAgreementContract
+  with
+    rentalAgreement : RentalAgreement
+  where
+    signatory rentalAgreement.property.owner, rentalAgreement.tenant
+
+    observer rentalAgreement.property.owner
+
+    key (rentalAgreement.agreementId, rentalAgreement.property.owner): (Text, Party)
+    maintainer key._2
+
+    choice StartRental : ContractId RentalAgreementContract
+      with
+        startDate : Date
+      controller rentalAgreement.property.owner, rentalAgreement.tenant
+      do
+        nowTime <- getTime
+        let nowDate = toDateUTC nowTime
+        assertMsg "Rental start date must be in the future." (startDate >= nowDate)
+        create this with rentalAgreement = rentalAgreement with startDate = startDate
+
+    choice MakePayment : ContractId RentalAgreementContract
+      with
+        amount : Decimal
+      controller rentalAgreement.tenant
+      do
+        assertMsg "Payment amount must be equal to rent." (amount == rentalAgreement.rent)
+        create this with rentalAgreement = rentalAgreement with paymentStatus = Completed
+
+    choice EndRental : ()
+      with
+        endDate : Date
+      controller rentalAgreement.property.owner, rentalAgreement.tenant
+      do
+        nowTime <-getTime
+        let nowDate = toDateUTC nowTime
+        assertMsg "Rental end date must be in the future." (endDate >= nowDate)
+        archive self
+
+    choice MaintenanceRequest : ContractId RentalAgreementContract
+      with
+        request : Text
+      controller rentalAgreement.tenant
+      do
+        assertMsg "Property must be in Rented status to request maintenance." (rentalAgreement.property.status == Rented)
+        create this with rentalAgreement = rentalAgreement with property = rentalAgreement.property with status = Maintenance
+
+-- Property Listing Template
+template PropertyListing
+  with
+    property : Property
+    observer : Party
+  where
+    signatory property.owner
+    observer observer
+
+    key (property.propertyId, property.owner) : (Text, Party)
+    maintainer key._2
+
+    choice UpdateStatus : ContractId PropertyListing
+      with
+        newStatus : PropertyStatus
+      controller property.owner
+      do
+        assertMsg "Property must be Available to be listed." (property.status == Available)
+        create this with property = property with status = newStatus

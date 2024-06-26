@@ -1,0 +1,179 @@
+module PropertyRentalTest where
+
+import Daml.Script
+import PropertyRental
+import DA.Date (date, Month(Jan, Dec))
+
+testPropertyListing : Script ()
+testPropertyListing = script do
+  owner <- allocateParty "Owner"
+  observer <- allocateParty "Observer"
+
+  -- Create Property Listing
+  propertyListingCid <- submit owner do
+    createCmd PropertyListing with
+      property = Property with
+        propertyId = "prop-001"
+        address = "123 Main St"
+        owner = owner
+        status = Available
+      observer = observer
+
+  -- Update Property Status
+  _ <- submit owner do
+    exerciseCmd propertyListingCid UpdateStatus with
+      newStatus = Rented
+
+  return ()
+
+testRentalAgreement : Script ()
+testRentalAgreement = script do
+  owner <- allocateParty "Owner"
+  tenant <- allocateParty "Tenant"
+
+  -- Create Property
+  let property = Property with
+        propertyId = "prop-002"
+        address = "456 Elm St"
+        owner = owner
+        status = Available
+
+  -- Create Rental Agreement
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    createCmd RentalAgreementContract with
+      rentalAgreement = RentalAgreement with
+        agreementId = "agr-001"
+        property = property
+        tenant = tenant
+        startDate = date 2024 Jan 01
+        endDate = date 2024 Dec 31
+        rent = 1000.0
+        paymentStatus = Pending
+
+  -- Start Rental
+  _ <- submitMulti [owner, tenant] [] do
+    exerciseCmd rentalAgreementCid StartRental with
+      startDate = date 2024 Jan 01
+
+  -- Make Payment
+  _ <- submitMustFail tenant do
+    exerciseCmd rentalAgreementCid MakePayment with
+      amount = 1000.0
+
+  return ()
+
+testInvalidPropertyStatusUpdate : Script ()
+testInvalidPropertyStatusUpdate = script do
+  owner <- allocateParty "Owner"
+  observer <- allocateParty "Observer"
+
+  -- Create Property Listing with non-available status
+  propertyListingCid <- submit owner do
+    createCmd PropertyListing with
+      property = Property with
+        propertyId = "prop-004"
+        address = "123 Main St"
+        owner = owner
+        status = Rented
+      observer = observer
+
+  -- Attempt to update status (should fail)
+  submitMustFail owner do
+    exerciseCmd propertyListingCid UpdateStatus with
+      newStatus = Maintenance
+
+  return ()
+
+testInvalidRentalStartDate : Script ()
+testInvalidRentalStartDate = script do
+  owner <- allocateParty "Owner"
+  tenant <- allocateParty "Tenant"
+
+  -- Create Property
+  let property = Property with
+        propertyId = "prop-005"
+        address = "456 Elm St"
+        owner = owner
+        status = Available
+
+  -- Create Rental Agreement
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    createCmd RentalAgreementContract with
+      rentalAgreement = RentalAgreement with
+        agreementId = "agr-003"
+        property = property
+        tenant = tenant
+        startDate = date 2023 Dec 31  -- Past date
+        endDate = date 2024 Dec 31
+        rent = 1000.0
+        paymentStatus = Pending
+
+  -- Attempt to start rental (should fail)
+  submitMustFail owner do
+    exerciseCmd rentalAgreementCid StartRental with
+      startDate = date 2023 Dec 31
+
+  return ()
+
+testEndRentalAgreement : Script ()
+testEndRentalAgreement = script do
+  owner <- allocateParty "Owner"
+  tenant <- allocateParty "Tenant"
+
+  -- Create Property
+  let property = Property with
+        propertyId = "prop-003"
+        address = "789 Oak St"
+        owner = owner
+        status = Available
+
+  -- Create Rental Agreement
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    createCmd RentalAgreementContract with
+      rentalAgreement = RentalAgreement with
+        agreementId = "agr-002"
+        property = property
+        tenant = tenant
+        startDate = date 2024 Jan 01
+        endDate = date 2024 Dec 31
+        rent = 1000.0
+        paymentStatus = Pending
+
+  -- End Rental
+  _ <- submitMustFail owner do
+    exerciseCmd rentalAgreementCid EndRental with
+      endDate = date 2024 Dec 31
+
+  return ()
+
+testInvalidPaymentAmount : Script ()
+testInvalidPaymentAmount = script do
+  owner <- allocateParty "Owner"
+  tenant <- allocateParty "Tenant"
+
+  -- Create Property
+  let property = Property with
+        propertyId = "prop-006"
+        address = "789 Oak St"
+        owner = owner
+        status = Available
+
+  -- Create Rental Agreement
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    createCmd RentalAgreementContract with
+      rentalAgreement = RentalAgreement with
+        agreementId = "agr-004"
+        property = property
+        tenant = tenant
+        startDate = date 2024 Jan 01
+        endDate = date 2024 Dec 31
+        rent = 1000.0
+        paymentStatus = Pending
+
+  -- Attempt to make payment with incorrect amount (should fail)
+  submitMustFail tenant do
+    exerciseCmd rentalAgreementCid MakePayment with
+      amount = 500.0
+
+  return ()
+
