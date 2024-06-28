@@ -1,4 +1,4 @@
-# Decentralized Property Rental Management System
+# Property Rental Management System
 
 ## Overview
 
