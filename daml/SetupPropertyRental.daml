@@ -1,0 +1,65 @@
+module SetupPropertyRental where
+
+import Daml.Script
+import PropertyRental
+import DA.Date (date)
+import DA.Date.Types (Month(Jan,Dec))
+
+data TestParties = TestParties with
+    owner : Party
+    tenant : Party
+    observer : Party
+
+setupTestParties : Script TestParties
+setupTestParties = script do
+    owner <- allocatePartyWithHint "Owner" (PartyIdHint "OWN")
+    tenant <- allocatePartyWithHint "Tenant" (PartyIdHint "TEN")
+    observer <- allocatePartyWithHint "Observer" (PartyIdHint "OBS")
+
+    return TestParties with
+        owner
+        tenant
+        observer
+
+setup : Script ()
+setup = script do
+    testParties <- setupTestParties
+
+    let property1 = Property with
+          propertyId = "prop-001"
+          address = "123 Main St"
+          owner = testParties.owner
+          status = Available
+
+    let rentalAgreement1 = RentalAgreement with
+          agreementId = "agr-001"
+          property = property1
+          tenant = testParties.tenant
+          startDate = date 2024 Jan 01
+          endDate = date 2024 Dec 31
+          rent = 1000.0
+          paymentStatus = Pending
+
+    propertyListingCid <- submitMulti [testParties.owner, testParties.tenant] []  do
+        createCmd PropertyListing with
+            property = property1
+            observer = testParties.observer
+
+    rentalAgreementCid <- submitMulti [testParties.owner, testParties.tenant] [] do
+        createCmd RentalAgreementContract with
+            rentalAgreement = rentalAgreement1
+
+    createUsers testParties
+
+    pure ()
+
+createUsers : TestParties -> Script ()
+createUsers TestParties{..} = do
+    ownerId <- validateUserId "Owner"
+    tenantId <- validateUserId "Tenant"
+    observerId <- validateUserId "Observer"
+
+    createUser (User ownerId (Some owner)) [CanActAs owner]
+    createUser (User tenantId (Some tenant)) [CanActAs tenant]
+    createUser (User observerId (Some observer)) [CanActAs observer]
+    pure ()

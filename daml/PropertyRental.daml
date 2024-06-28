@@ -49,7 +49,7 @@ template RentalAgreementContract
         assertMsg "Rental start date must be in the future." (startDate >= nowDate)
         create this with rentalAgreement = rentalAgreement with startDate = startDate
 
-    choice MakePayment : ContractId RentalAgreementContract
+    nonconsuming  choice MakePayment : ContractId RentalAgreementContract
       with
         amount : Decimal
       controller rentalAgreement.tenant
