@@ -6,12 +6,20 @@ import PropertyRental
 import DA.Date (date, Month(Jan, Dec))
 import Prelude 
 import DA.List.Total (head)
+import DA.Tuple
+import DA.Optional
+
+setup : Script (Party, Party, Party, Party)
+setup = do
+  owner <- allocateParty "Owner"
+  tenant1 <- allocateParty "Tenant1"
+  tenant2 <- allocateParty "Tenant2"
+  observer <- allocateParty "Observer"
+  return (owner, tenant1, tenant2, observer)
 
 testPropertyListing : Script ()
 testPropertyListing = script do
-  owner <- allocateParty "Owner"
-  observer1 <- allocateParty "Observer"
-
+  (owner, _, _, observer1) <- setup
   -- Create Property Listing
   propertyListingCid <- submit owner do
     createCmd PropertyListing with
@@ -31,9 +39,7 @@ testPropertyListing = script do
 
 testRentalAgreement : Script ()
 testRentalAgreement = script do
-  owner <- allocateParty "Owner"
-  tenant <- allocateParty "Tenant"
-
+  (owner, tenant, _, _) <- setup
   -- Create Property
   let property = Property with
         propertyId = "prop-002"
@@ -67,8 +73,7 @@ testRentalAgreement = script do
 
 testInvalidPropertyStatusUpdate : Script ()
 testInvalidPropertyStatusUpdate = script do
-  owner <- allocateParty "Owner"
-  observer1 <- allocateParty "Observer"
+  (owner, _, _, observer1) <- setup
 
   -- Create Property Listing with non-available status
   propertyListingCid <- submit owner do
@@ -89,8 +94,8 @@ testInvalidPropertyStatusUpdate = script do
 
 testInvalidRentalStartDate : Script ()
 testInvalidRentalStartDate = script do
-  owner <- allocateParty "Owner"
-  tenant <- allocateParty "Tenant"
+  (owner, tenant, _, _) <- setup
+
 
   -- Create Property
   let property = Property with
@@ -120,8 +125,8 @@ testInvalidRentalStartDate = script do
 
 testEndRentalAgreement : Script ()
 testEndRentalAgreement = script do
-  owner <- allocateParty "Owner"
-  tenant <- allocateParty "Tenant"
+  (owner, tenant, _, _) <- setup
+
 
   -- Create Property
   let property = Property with
@@ -151,9 +156,7 @@ testEndRentalAgreement = script do
 
 testInvalidPaymentAmount : Script ()
 testInvalidPaymentAmount = script do
-  owner <- allocateParty "Owner"
-  tenant <- allocateParty "Tenant"
-
+  (owner, tenant, _, _) <- setup
   -- Create Property
   let property = Property with
         propertyId = "prop-006"
@@ -180,14 +183,53 @@ testInvalidPaymentAmount = script do
 
   return ()
 
+testMakePaymentHappyPath : Script ()
+testMakePaymentHappyPath = script do
+  (owner, tenant,_, observer) <- setup
+
+  -- Create Property
+  let property = Property with
+        propertyId = "prop-001"
+        address = "123 Main St"
+        owner = owner
+        status = Available
+
+  -- Create Rental Agreement
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    createCmd RentalAgreementContract with
+      rentalAgreement = RentalAgreement with
+        agreementId = "agr-001"
+        property = property
+        tenant = tenant
+        startDate = date 2024 Jan 01
+        endDate = date 2024 Dec 31
+        rent = 1000.0
+        paymentStatus = Pending
+
+  -- Start Rental
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    exerciseCmd rentalAgreementCid StartRental with
+      startDate = date 2024 Jan 01
+
+-- Make Payment
+  updatedRentalAgreementCid <- submit tenant do
+    exerciseCmd rentalAgreementCid MakePayment with
+      amount = 1000.0
+
+  -- Fetch the updated rental agreement
+  updatedRentalAgreement <- queryContractId @RentalAgreementContract tenant updatedRentalAgreementCid
+  let fromSomeupdatedRentalAgreement = fromSome updatedRentalAgreement
+  
+  debug("message:"<> show  fromSomeupdatedRentalAgreement.rentalAgreement.paymentStatus)
+
+  -- Assert that the payment status is now Completed
+  assertMsg "Payment should be completed" ( fromSomeupdatedRentalAgreement.rentalAgreement.paymentStatus == Completed)
+
+  return ()
 
 testFetchAllAgreementsForProperty : Script ()
 testFetchAllAgreementsForProperty = script do
-    -- Define test participants
-    owner <- allocateParty "Owner"
-    tenant1 <- allocateParty "Tenant1"
-    tenant2 <- allocateParty "Tenant2"
-    observer1 <- allocateParty "Observer"
+    (owner, tenant1, tenant2, observer1) <- setup
 
     -- Create a property
     let property = Property with
@@ -238,9 +280,7 @@ testFetchAllAgreementsForProperty = script do
 testFetchAgreementByPropertyId :  Script ()
 testFetchAgreementByPropertyId = script do
   -- Define test participants
-    owner <- allocateParty "Owner"
-    tenant <- allocateParty "Tenant"
-    observer1 <- allocateParty "Observer"
+    (owner, tenant, _, observer1) <- setup
 
     -- Create a property
     let property = Property with

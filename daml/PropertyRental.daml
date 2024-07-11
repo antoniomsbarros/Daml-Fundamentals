@@ -47,9 +47,9 @@ template RentalAgreementContract
         nowTime <- getTime
         let nowDate = toDateUTC nowTime
         assertMsg "Rental start date must be in the future." (startDate >= nowDate)
-        create this with rentalAgreement = rentalAgreement with startDate = startDate
+        create this with rentalAgreement = rentalAgreement with startDate = startDate 
 
-    nonconsuming choice MakePayment : ContractId RentalAgreementContract
+    choice MakePayment : ContractId RentalAgreementContract
       with
         amount : Decimal
       controller rentalAgreement.tenant
