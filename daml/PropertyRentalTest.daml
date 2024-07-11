@@ -1,13 +1,16 @@
+{-# LANGUAGE RebindableSyntax #-}
 module PropertyRentalTest where
 
 import Daml.Script
 import PropertyRental
 import DA.Date (date, Month(Jan, Dec))
+import Prelude 
+import DA.List.Total (head)
 
 testPropertyListing : Script ()
 testPropertyListing = script do
   owner <- allocateParty "Owner"
-  observer <- allocateParty "Observer"
+  observer1 <- allocateParty "Observer"
 
   -- Create Property Listing
   propertyListingCid <- submit owner do
@@ -17,7 +20,7 @@ testPropertyListing = script do
         address = "123 Main St"
         owner = owner
         status = Available
-      observer = observer
+      observer1 = observer1
 
   -- Update Property Status
   _ <- submit owner do
@@ -65,7 +68,7 @@ testRentalAgreement = script do
 testInvalidPropertyStatusUpdate : Script ()
 testInvalidPropertyStatusUpdate = script do
   owner <- allocateParty "Owner"
-  observer <- allocateParty "Observer"
+  observer1 <- allocateParty "Observer"
 
   -- Create Property Listing with non-available status
   propertyListingCid <- submit owner do
@@ -75,7 +78,7 @@ testInvalidPropertyStatusUpdate = script do
         address = "123 Main St"
         owner = owner
         status = Rented
-      observer = observer
+      observer1 = observer1
 
   -- Attempt to update status (should fail)
   submitMustFail owner do
@@ -176,4 +179,113 @@ testInvalidPaymentAmount = script do
       amount = 500.0
 
   return ()
+
+
+testFetchAllAgreementsForProperty : Script ()
+testFetchAllAgreementsForProperty = script do
+    -- Define test participants
+    owner <- allocateParty "Owner"
+    tenant1 <- allocateParty "Tenant1"
+    tenant2 <- allocateParty "Tenant2"
+    observer1 <- allocateParty "Observer"
+
+    -- Create a property
+    let property = Property with
+          propertyId = "property1"
+          address = "123 Main St"
+          owner = owner
+          status = Available
+
+    -- Create two rental agreements
+    let rentalAgreement1 = RentalAgreement with
+          agreementId = "agreement1"
+          property = property
+          tenant = tenant1
+          startDate = date 2024 Jan 1
+          endDate = date 2025 Jan 31
+          rent = 1000.0
+          paymentStatus = Pending
+
+    let rentalAgreement2 = RentalAgreement with
+          agreementId = "agreement2"
+          property = property
+          tenant = tenant2
+          startDate = date 2024 Jan 1
+          endDate = date 2025 Jan 31
+          rent = 1200.0
+          paymentStatus = Pending
+
+    -- Create the rental agreement contracts
+    rentalAgreementCid1 <- submitMulti [owner, tenant1] [] do
+        createCmd RentalAgreementContract with rentalAgreement = rentalAgreement1
+    rentalAgreementCid2 <- submitMulti [owner, tenant2] [] do
+        createCmd RentalAgreementContract with rentalAgreement = rentalAgreement2
+
+    -- Create the property listing contract
+    propertyListingCid <- submit owner do
+        createCmd PropertyListing with property = property, observer1 = observer1
+
+    -- Fetch all rental agreements using FetchAllAgreementsForProperty choice
+    fetchedAgreements <- submit owner do
+        exerciseCmd propertyListingCid (FetchAllAgreementsForProperty with agreementIds = ["agreement1", "agreement2"])
+
+    let countWithExistent = length fetchedAgreements
+    assertMsg "Count of fetched agreements" (countWithExistent == 2) 
+    debug ("The number of fetched agreements is: " <> show countWithExistent)
+
+    return ()
+
+testFetchAgreementByPropertyId :  Script ()
+testFetchAgreementByPropertyId = script do
+  -- Define test participants
+    owner <- allocateParty "Owner"
+    tenant <- allocateParty "Tenant"
+    observer1 <- allocateParty "Observer"
+
+    -- Create a property
+    let property = Property with
+          propertyId = "property1"
+          address = "123 Main St"
+          owner = owner
+          status = Available
+
+    -- Create a rental agreement
+    let rentalAgreement = RentalAgreement with
+          agreementId = "agreement1"
+          property = property
+          tenant = tenant
+          startDate = date 2024 Jan 1
+          endDate = date 2025 Jan 31
+          rent = 1000.0
+          paymentStatus = Pending
+
+    -- Create the rental agreement contract
+    rentalAgreementCid <- submitMulti [owner, tenant] [] do
+        createCmd RentalAgreementContract with rentalAgreement = rentalAgreement
+
+    -- Create the property listing contract
+    propertyListingCid <- submitMulti [owner, tenant] [] do
+        createCmd PropertyListing with property = property, observer1 = observer1
+
+    -- Fetch the rental agreement using FetchAgreementByPropertyId choice
+    fetchedAgreement <- submit owner do
+        exerciseCmd propertyListingCid (FetchAgreementByPropertyId with agreementId = "agreement1")
+
+    -- Check the fetched agreement
+    case fetchedAgreement of
+      Left err -> assert False
+      Right agreement -> assert (agreement == rentalAgreement)
+
+    -- Try to fetch a non-existent agreement
+    nonExistentAgreement <- submit owner do
+        exerciseCmd propertyListingCid (FetchAgreementByPropertyId with agreementId = "non-existent-agreement")
+
+    -- Check that the result is Left with the correct error message
+    case nonExistentAgreement of
+      Left err -> assert (err == "Agreement not found.")
+      Right _ -> assert False
+
+
+
+
 

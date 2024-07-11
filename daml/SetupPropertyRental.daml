@@ -43,7 +43,7 @@ setup = script do
     propertyListingCid <- submitMulti [testParties.owner, testParties.tenant] []  do
         createCmd PropertyListing with
             property = property1
-            observer = testParties.observer
+            observer1 = testParties.observer
 
     rentalAgreementCid <- submitMulti [testParties.owner, testParties.tenant] [] do
         createCmd RentalAgreementContract with

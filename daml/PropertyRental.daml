@@ -49,7 +49,7 @@ template RentalAgreementContract
         assertMsg "Rental start date must be in the future." (startDate >= nowDate)
         create this with rentalAgreement = rentalAgreement with startDate = startDate
 
-    nonconsuming  choice MakePayment : ContractId RentalAgreementContract
+    nonconsuming choice MakePayment : ContractId RentalAgreementContract
       with
         amount : Decimal
       controller rentalAgreement.tenant
@@ -62,7 +62,7 @@ template RentalAgreementContract
         endDate : Date
       controller rentalAgreement.property.owner, rentalAgreement.tenant
       do
-        nowTime <-getTime
+        nowTime <- getTime
         let nowDate = toDateUTC nowTime
         assertMsg "Rental end date must be in the future." (endDate >= nowDate)
         archive self
@@ -79,10 +79,10 @@ template RentalAgreementContract
 template PropertyListing
   with
     property : Property
-    observer : Party
+    observer1 : Party
   where
     signatory property.owner
-    observer observer
+    observer observer1
 
     key (property.propertyId, property.owner) : (Text, Party)
     maintainer key._2
@@ -94,3 +94,36 @@ template PropertyListing
       do
         assertMsg "Property must be Available to be listed." (property.status == Available)
         create this with property = property with status = newStatus
+    -- New choice to fetch an agreement for a specific property
+    nonconsuming choice FetchAgreementByPropertyId : Either Text RentalAgreement
+      with
+        agreementId : Text
+      controller property.owner
+      do
+        agreementContract <- lookupByKey @RentalAgreementContract (agreementId, property.owner)
+        case agreementContract of
+          None -> pure (Left "Agreement not found.")
+          Some contractId -> do
+            agreement <- fetch contractId
+            pure (Right agreement.rentalAgreement)
+
+-- New iterative choice to fetch all agreements for a specific property
+    nonconsuming choice FetchAllAgreementsForProperty : [RentalAgreement]
+      with
+        agreementIds : [Text]
+      controller property.owner
+      do
+        let fetchAgreement acc agreementId = do
+              agreementContract <- lookupByKey @RentalAgreementContract (agreementId, property.owner)
+              case agreementContract of
+                None -> pure acc
+                Some contractId -> do
+                  agreement <- fetch contractId
+                  pure (agreement.rentalAgreement :: acc)
+        -- Start with an empty list and fold over the list of agreement IDs
+        results <- foldl (\acc agreementId -> do
+                              current <- acc
+                              next <- fetchAgreement [] agreementId
+                              pure (next ++ current)
+                          ) (pure []) agreementIds
+        pure results
