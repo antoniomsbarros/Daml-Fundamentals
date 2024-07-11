@@ -5,8 +5,6 @@ import Daml.Script
 import PropertyRental
 import DA.Date (date, Month(Jan, Dec))
 import Prelude 
-import DA.List.Total (head)
-import DA.Tuple
 import DA.Optional
 
 setup : Script (Party, Party, Party, Party)
@@ -224,6 +222,101 @@ testMakePaymentHappyPath = script do
 
   -- Assert that the payment status is now Completed
   assertMsg "Payment should be completed" ( fromSomeupdatedRentalAgreement.rentalAgreement.paymentStatus == Completed)
+
+  return ()
+
+testEndRentalHappyPath : Script ()
+testEndRentalHappyPath = script do
+  (owner, tenant,_, observer) <- setup
+
+  -- Create Property
+  let property = Property with
+        propertyId = "prop-001"
+        address = "123 Main St"
+        owner = owner
+        status = Available
+
+  -- Create Rental Agreement
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    createCmd RentalAgreementContract with
+      rentalAgreement = RentalAgreement with
+        agreementId = "agr-001"
+        property = property
+        tenant = tenant
+        startDate = date 2024 Jan 01
+        endDate = date 2024 Dec 31
+        rent = 1000.0
+        paymentStatus = Pending
+
+  -- Start Rental
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    exerciseCmd rentalAgreementCid StartRental with
+      startDate = date 2024 Jan 01
+
+-- Make Payment
+  updatedRentalAgreementCid <- submit tenant do
+    exerciseCmd rentalAgreementCid MakePayment with
+      amount = 1000.0
+
+  -- End Rental
+  _ <- submitMulti [owner, tenant] [] do
+    exerciseCmd updatedRentalAgreementCid EndRental with
+     endDate = date 2024 Dec 31
+
+  -- Check if the contract is archived using queryContractId
+  queryResult <- queryContractId @RentalAgreementContract tenant updatedRentalAgreementCid
+  let isArchived = case queryResult of
+        None -> True
+        Some _ -> False
+
+  assertMsg "The contract should be archived" isArchived
+
+  return ()
+
+boolToText : Bool -> Text
+boolToText b = case b of
+  True -> "True"
+  False -> "False"
+
+testEndRentalUnHappyPath : Script ()
+testEndRentalUnHappyPath = script do
+  (owner, tenant,_, observer) <- setup
+
+  -- Create Property
+  let property = Property with
+        propertyId = "prop-001"
+        address = "123 Main St"
+        owner = owner
+        status = Available
+
+  -- Create Rental Agreement
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    createCmd RentalAgreementContract with
+      rentalAgreement = RentalAgreement with
+        agreementId = "agr-001"
+        property = property
+        tenant = tenant
+        startDate = date 2024 Jan 01
+        endDate = date 2024 Dec 31
+        rent = 1000.0
+        paymentStatus = Pending
+
+  -- Start Rental
+  rentalAgreementCid <- submitMulti [owner, tenant] [] do
+    exerciseCmd rentalAgreementCid StartRental with
+      startDate = date 2024 Jan 01
+
+  -- End Rental
+  _ <- submitMultiMustFail [owner, tenant] [] do
+    exerciseCmd rentalAgreementCid EndRental with
+     endDate = date 2024 Dec 31
+
+  -- Check if the contract is archived using queryContractId
+  queryResult <- queryContractId @RentalAgreementContract tenant rentalAgreementCid
+  let isArchived = case queryResult of
+        None -> True
+        Some _ -> False
+  assertMsg "The contract should be archived" (not isArchived)
 
   return ()
 

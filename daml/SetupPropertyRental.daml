@@ -24,6 +24,7 @@ setupTestParties = script do
 setup : Script ()
 setup = script do
     testParties <- setupTestParties
+    createUsers testParties
 
     let property1 = Property with
           propertyId = "prop-001"
@@ -49,7 +50,6 @@ setup = script do
         createCmd RentalAgreementContract with
             rentalAgreement = rentalAgreement1
 
-    createUsers testParties
 
     pure ()
 

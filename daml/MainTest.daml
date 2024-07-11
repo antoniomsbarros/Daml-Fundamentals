@@ -1,7 +1,7 @@
 module MainTest where
 
 import Daml.Script
-import PropertyRentalTest (testPropertyListing, testRentalAgreement, testEndRentalAgreement,testInvalidPropertyStatusUpdate,testInvalidRentalStartDate, testInvalidPaymentAmount)
+import PropertyRentalTest (testPropertyListing, testRentalAgreement, testEndRentalAgreement,testInvalidPropertyStatusUpdate,testInvalidRentalStartDate, testInvalidPaymentAmount,testFetchAgreementByPropertyId, testFetchAllAgreementsForProperty, testEndRentalUnHappyPath, testEndRentalHappyPath, testMakePaymentHappyPath)
 
 mainTest : Script ()
 mainTest = script do
@@ -11,4 +11,9 @@ mainTest = script do
   testInvalidPropertyStatusUpdate
   testInvalidRentalStartDate
   testInvalidPaymentAmount
+  testFetchAgreementByPropertyId
+  testFetchAllAgreementsForProperty
+  testEndRentalUnHappyPath
+  testEndRentalHappyPath
+  testMakePaymentHappyPath
   return ()

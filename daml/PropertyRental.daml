@@ -65,7 +65,8 @@ template RentalAgreementContract
         nowTime <- getTime
         let nowDate = toDateUTC nowTime
         assertMsg "Rental end date must be in the future." (endDate >= nowDate)
-        archive self
+        assertMsg "Payment most be completed." (rentalAgreement.paymentStatus == Completed)
+      --  archive self
 
     choice MaintenanceRequest : ContractId RentalAgreementContract
       with

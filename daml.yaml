@@ -1,4 +1,4 @@
-sdk-version: 2.5.0
+sdk-version: 2.8.5
 name: PropertyRentalAPP
 source: daml
 init-script: SetupPropertyRental:setup
